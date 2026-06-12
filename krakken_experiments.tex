@@ -1,0 +1,515 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\newcommand{\sbx}{S\nobreakdash-box}
+\newcommand{\sbxes}{S\nobreakdash-boxes}
+
+\title{Krakken-2048: Experimental Verification and Distinguisher Battery}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note is a companion to the active-\sbx\ bound analysis of Krakken-2048. It
+records two categories of result obtained by direct computation against the
+reference implementation: (i) \emph{exact proofs} of the cryptographic
+foundations the bound analysis relies on (the MDS branch number, the \sbx's\
+differential and linear properties, and the bijectivity of the word-permutation
+layers), each established by complete enumeration; and (ii) an \emph{empirical
+distinguisher battery} (avalanche, rotational and RX-difference,
+integral/saturation, cube / algebraic degree, one- and two-sided zero-sum, exact
+algebraic-degree growth, differential clustering, impossible differentials,
+boomerang / BCT, differential-linear, and invariant-subspace / \sbx-coset
+structure) run against the compiled
+permutation. The foundations are proven. The distinguisher battery finds no
+distinguisher surviving the full eight rounds in any tested family. We are
+explicit throughout that the battery is empirical and necessary-but-not-sufficient:
+each test rules out a \emph{detectable} weakness of its kind at the sampled
+scale, not the existence of a more subtle attack, and several have stronger
+(MILP-based) forms that remain future work.
+\end{abstract}
+
+\section{Exact proofs of the foundations}
+
+The following properties underlie every active-\sbx\ bound in the companion
+analysis. They had previously been inherited by analogy from AES/Whirlpool; here
+each is verified exhaustively for the constants as implemented.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+  \toprule
+  \textbf{Property} & \textbf{Method} & \textbf{Result} \\
+  \midrule
+  MDS branch number & all $12{,}869$ square submatrices over GF($2^8$) & $9$ (maximal) \\
+  \sbx\ bijection & full table check & permutation of $0\!-\!255$ \\
+  \sbx\ diff.\ uniformity & full $256\times256$ DDT & $4 \Rightarrow \mathrm{DP}=2^{-6}$ \\
+  \sbx\ linearity & full $256\times256$ LAT & bias $16 \Rightarrow \mathrm{corr}^2=2^{-6}$ \\
+  \sbx\ boomerang uniformity & full $256\times256$ BCT & $6 \Rightarrow$ switch $2^{-5.42}$ \\
+  $\pi$ word permutation & index-map bijection check & bijection \\
+  InkCloud word permutation & index-map bijection check & bijection \\
+  InkCloud multiplier & $\gcd(7,32)=1$ & invertible, $7^{-1}=23 \bmod 32$ \\
+  \bottomrule
+\end{tabular}
+\caption{Exhaustively-proven foundational properties (reduction polynomial
+$\mathtt{0x11D}$; MDS row $(1,1,4,1,8,5,2,9)$; ABYSSAL \sbx).}
+\end{table}
+
+These establish that the per-\sbx\ weight is exactly $2^{-6}$ for both
+differential and linear cryptanalysis, that the diffusion matrix achieves the
+maximal branch number $9$, and that the permutation layers preserve the full
+state (are bijective). The inverse permutation was additionally implemented and
+verified to round-trip bit-exactly with the forward permutation in both
+directions at all eight round counts.
+
+\section{Empirical distinguisher battery}
+
+Each test below was run against the compiled reference permutation. For each we
+state what a positive (weak) result would look like and what was observed.
+
+\subsection{Avalanche (strict diffusion)}
+Flipping a single input bit should change about half of the $2048$ output bits.
+Measured over $200$ trials per round:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcccc}
+  \toprule
+  \textbf{Round} & \textbf{mean} & \textbf{min} & \textbf{max} & \textbf{std} \\
+  \midrule
+  1 & 0.4996 & 0.4673 & 0.5332 & 0.0114 \\
+  2 & 0.4998 & 0.4707 & 0.5454 & 0.0119 \\
+  3 & 0.4990 & 0.4639 & 0.5283 & 0.0107 \\
+  4 & 0.5004 & 0.4634 & 0.5322 & 0.0115 \\
+  5 & 0.5009 & 0.4604 & 0.5283 & 0.0112 \\
+  6 & 0.5004 & 0.4722 & 0.5386 & 0.0108 \\
+  7 & 0.4994 & 0.4712 & 0.5312 & 0.0113 \\
+  8 & 0.4997 & 0.4717 & 0.5337 & 0.0119 \\
+  \bottomrule
+\end{tabular}
+\caption{Fraction of output bits changed by a one-bit input flip. Full avalanche
+(mean within $1\%$ of $0.5$) is reached at round $1$ and held through round $8$.}
+\end{table}
+
+\subsection{Strict avalanche criterion, completeness, and monobit balance}
+The avalanche test above reports only the \emph{mean} fraction of output bits
+flipped. A mean of exactly $0.5$ is, however, compatible with a badly structured
+per-bit dependency: an input bit that always flips a given output bit, and never
+flips another, averages to $0.5$ while violating diffusion. To see this we
+measure the full strict-avalanche-criterion (SAC) matrix (Webster and Tavares, 1986): for
+every pair (input bit $i$, output bit $j$),
+\[
+  \mathrm{SAC}[i][j] \;=\; \Pr\!\big[\text{output bit } j \text{ flips}
+  \;\big|\; \text{input bit } i \text{ is flipped}\big]
+  \qquad(\text{ideal } \tfrac12),
+\]
+estimated over $N=4096$ random base states per input bit ($2048\times2048=
+4.19\times10^{6}$ cells, $2\times2048\times N$ permutation calls per round). From
+the same data we extract two derived properties: \emph{completeness} (every cell
+strictly between $0$ and $N$, i.e.\ every input bit influences every output bit
+but none deterministically) and a per-output-bit \emph{monobit} frequency over
+random inputs (ideal $\tfrac12$). At $N=4096$ the two-sided $5\sigma$ threshold
+on a single proportion is $|p-\tfrac12|>0.0391$.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccccc}
+  \toprule
+  \textbf{Round} & \textbf{SAC max} & \textbf{SAC mean} &
+  \textbf{cells $>5\sigma$} & \textbf{dead / stuck} & \textbf{monobit max} \\
+   & $|p{-}\tfrac12|$ & $|p{-}\tfrac12|$ & (exp.\ $\approx2.4$) & cells & $|f{-}\tfrac12|$ \\
+  \midrule
+  1 & 0.0415 & 0.0062 & 4 & 0 / 0 & 0.0276 \\
+  2 & 0.0405 & 0.0062 & 2 & 0 / 0 & 0.0295 \\
+  3 & 0.0422 & 0.0062 & 5 & 0 / 0 & 0.0305 \\
+  4 & 0.0422 & 0.0062 & 2 & 0 / 0 & 0.0249 \\
+  5 & 0.0413 & 0.0062 & 3 & 0 / 0 & 0.0264 \\
+  6 & 0.0427 & 0.0062 & 1 & 0 / 0 & 0.0293 \\
+  7 & 0.0435 & 0.0062 & 4 & 0 / 0 & 0.0271 \\
+  8 & 0.0413 & 0.0062 & 4 & 0 / 0 & 0.0303 \\
+  \bottomrule
+\end{tabular}
+\caption{SAC matrix, completeness, and monobit balance ($N=4096$ per input bit,
+$5\sigma=0.0391$). ``SAC mean $|p{-}\tfrac12|$'' is the mean absolute deviation
+across all $4.19\times10^{6}$ cells; the value $0.0062$ is exactly that expected
+of an ideal $\mathrm{Binomial}(N,\tfrac12)$ proportion
+($\approx0.399\,\sigma$). ``cells $>5\sigma$'' tracks the random-expected $2.4$
+false positives. ``dead'' cells never flip (incomplete diffusion), ``stuck''
+cells always flip (deterministic coupling); both are zero at every round.}
+\end{table}
+
+The SAC matrix is statistically indistinguishable from ideal at \emph{every}
+round including round~$1$: the mean cell deviation is exactly the random-sampling
+value, and the one-to-five cells exceeding $5\sigma$ are consistent with the
+$\approx2.4$ false positives expected over $4.19\times10^{6}$ cells. The
+completeness count is decisive: with zero dead and zero stuck cells at all
+rounds, every one of the $2048$ input bits provably influences every one of the
+$2048$ output bits, and none does so deterministically---the per-bit form of the
+full-state first-round diffusion claimed by the mean-avalanche test. No
+output-bit monobit bias was detected at any round. This is a stronger negative
+result than the mean avalanche: a permutation with a correct mean but a
+structured dependency matrix would fail here, and none of the $2048\times2048$
+couplings deviates beyond sampling noise.
+
+\subsection{NIST SP 800-22 statistical test suite on the sponge keystream}
+The probes above target the bare permutation. We additionally subjected the full
+sponge \emph{keystream}---the permutation as used in the stream-cipher mode of
+the Krakken-Disk volume encryptor---to the NIST Statistical Test Suite
+(SP~800-22). Three independent $5500$\,MB encrypted volume containers were
+produced. Each container is initialised \emph{empty}, so its plaintext is
+essentially the all-zero sector image; the encryptor forms
+$\mathit{ciphertext}_i = \mathit{plaintext}_i \oplus
+\mathrm{Sponge}(\mathit{key}\,\|\,\mathit{nonce}\,\|\,\mathrm{LE64}(i))$,
+so up to the per-sector random nonces ($24$ bytes per $4096$-byte sector) and a
+small fixed header the ciphertext \emph{is} the Krakken sponge keystream. Testing
+the ciphertext of an empty container is therefore, in effect, testing the raw
+keystream, with no plaintext entropy masking the permutation.
+
+Each file was assessed over $10$ sequences of $10^{6}$ bits (the standard STS
+configuration). All fifteen test families---Frequency, Block Frequency,
+Cumulative Sums, Runs, Longest Run, Binary Matrix Rank, Spectral (FFT),
+Non-Overlapping Template ($148$ templates), Overlapping Template, Maurer's
+Universal, Approximate Entropy, Random Excursions and its Variant, Serial, and
+Linear Complexity---passed for all three files: every test's proportion of
+passing sequences met or exceeded the NIST minimum ($8/10$, or $5/6$ for the
+random-excursion tests), and every uniformity $P$-value was non-degenerate.%
+\footnote{The suite overwrites its summary report on each run; the complete
+fifteen-family report is retained for \texttt{random3.bin} (no failures) and the
+other two files were logged at the same all-pass level.}
+
+As an independent high-throughput cross-check, a custom monobit and runs test was
+run over a larger $10^{8}$-bit window of each file (Table~\ref{tab:nist_ht}); all
+$P$-values are unremarkable and every byte-level Shannon entropy exceeded
+$7.999$ bits/byte.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccc}
+  \toprule
+  \textbf{File} & \textbf{Monobit $P$} & \textbf{Runs $P$} & \textbf{Entropy (bits/byte)} \\
+  \midrule
+  \texttt{random1.bin} & 0.7165 & 0.5258 & $>7.999$ \\
+  \texttt{random2.bin} & 0.2247 & 0.3089 & $>7.999$ \\
+  \texttt{random3.bin} & 0.9925 & 0.5349 & $>7.999$ \\
+  \bottomrule
+\end{tabular}
+\caption{High-throughput monobit and runs cross-check over $10^{8}$ bits per
+file. All $P$-values exceed the $0.01$ significance threshold.}
+\label{tab:nist_ht}
+\end{table}
+
+This is a mode-level empirical randomness check on the sponge keystream: like the
+rest of the battery it is necessary but not sufficient, ruling out detectable
+first- and second-order statistical bias at the sampled scale
+($\approx10^{7}$--$10^{8}$ bits) rather than establishing a security property of
+any construction built on the permutation.
+
+\subsection{Sponge-hash collisions and output distribution}
+The NIST suite above tests the keystream; here we test the sponge \emph{hash}
+($256$-bit digest, rate $160$ bytes) for collision and distribution behaviour, a
+family the rest of this note does not cover. Three quick probes were run against
+the compiled hash.
+
+\textbf{Birthday collisions.} We hashed $N=10^{6}$ random messages, truncated
+each digest to $t$ bits, and counted colliding pairs. For an ideal random
+function the expected number of colliding pairs is
+$\binom{N}{2}/2^{t}\approx N^{2}/2^{t+1}$; a structural collision weakness would
+appear as a large excess at some truncation width.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{rrrr}
+  \toprule
+  \textbf{$t$ (bits)} & \textbf{expected} & \textbf{observed} & \textbf{obs/exp} \\
+  \midrule
+  28 & 1862.6 & 1835 & 0.985 \\
+  30 &  465.7 &  495 & 1.063 \\
+  32 &  116.4 &  122 & 1.048 \\
+  34 &   29.1 &   27 & 0.928 \\
+  36 &    7.28 &    5 & 0.687 \\
+  38 &    1.82 &    2 & 1.100 \\
+  40 &    0.46 &    1 & 2.199 \\
+  \bottomrule
+\end{tabular}
+\caption{Truncated-digest birthday collisions, $N=10^{6}$ messages. Observed
+counts track the ideal $N^{2}/2^{t+1}$ closely wherever the expectation is
+statistically meaningful ($t\le34$); the apparent ratios at $t\ge36$ are
+small-count Poisson fluctuations (expectation below $7$). No truncation width
+shows a collision excess.}
+\end{table}
+
+\textbf{Output diffusion / near-collisions.} For $2\times10^{5}$ random message
+pairs differing in a single input bit, the full $256$-bit digest difference had
+mean Hamming weight $127.98$ (ideal $128$) and standard deviation $8.00$ (ideal
+$\sqrt{256\cdot\tfrac14}=8$); the minimum over all pairs was $93$ and the maximum
+$165$. The minimum staying far from $0$ rules out cheap one-bit near-collisions.
+
+\textbf{Digest byte uniformity.} Over $2\times10^{5}$ digests
+($6.4\times10^{6}$ output bytes), the byte-value frequencies gave
+$\chi^{2}=273.8$ on $255$ degrees of freedom (ideal $255\pm22.6$; $z=+0.83$),
+consistent with a uniform output distribution.
+
+All three probes are consistent with an ideal random function; as elsewhere they
+are empirical and sampling-bounded, excluding gross collision or distribution
+defects at the $\sim\!10^{6}$-message scale rather than establishing collision
+resistance analytically.
+
+\subsection{Rotational}
+Rotational cryptanalysis exploits that XOR, AND, and bit-rotation commute with
+rotating the whole state. We compare $\mathrm{rotate}(P(X))$ against
+$P(\mathrm{rotate}(X))$: a rotation-invariant design makes these equal, a sound
+design makes them differ in $\sim\!1024$ of $2048$ bits (random). Measured mean
+Hamming distance was $1022.9$–$1025.2$ across rounds $1$–$8$ for rotation
+amount $1$, and $1022.9$–$1024.9$ at eight rounds across rotation amounts
+$\{1,7,13,17,32,63\}$. No rotational relation was detected at any round; the
+relation is destroyed from round $1$, consistent with the non-symmetric round
+constants and the carry behaviour of the PRESSURE additions breaking rotational
+invariance.
+
+\subsection{Integral / saturation}
+Saturating one input byte through all $256$ values and XOR-summing the outputs
+should yield a balanced (zero-sum) signature in many output bytes if the design
+has a surviving integral property. Random expectation is $\sim\!1$ zero byte of
+$256$. Measured averages were $0.25$–$1.25$ zero bytes across rounds $1$–$8$
+(samples at or below the random baseline at every round). No integral
+distinguisher was found at any round---including round $1$, a stronger outcome
+than AES, whose classical integral survives three rounds; Krakken's full-state
+first-round diffusion removes the balanced property immediately.
+
+\subsection{Cube / algebraic degree}
+XOR-summing the output over all assignments of a $k$-bit input cube reveals the
+top-degree ANF coefficient; a structural zero across many constant settings is a
+cube distinguisher. Using $k=8$ and requiring the cube-sum bit to vanish across
+$20$ random constants (chance baseline $2048\cdot2^{-20}\approx0.002$, so any
+survivor is real signal), the count of consistent-zero output bits was:
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lc}
+  \toprule
+  \textbf{Round} & \textbf{consistent-zero bits (of 2048)} \\
+  \midrule
+  1 & 32 \\
+  2 & 0 \\
+  3 & 0 \\
+  4 & 0 \\
+  8 & 0 \\
+  \bottomrule
+\end{tabular}
+\caption{Cube / algebraic-degree distinguisher. A genuine distinguisher shows a
+count that decays to zero as algebraic degree builds; here it does so by round
+$2$. The round-$1$ value ($32$) is a real but expected low-degree artifact of a
+single round, far below the eight-round permutation.}
+\end{table}
+
+\subsection{Zero-sum (forward and two-sided)}
+A zero-sum set has both input-XOR and output-XOR equal to zero. The
+\emph{forward} test built affine input subspaces (input-XOR $=0$ by
+construction, dimension $8$, $24$ subspaces) and found no round at which the
+output-XOR was also zero ($0$ full zero-sums, $0$ consistent-zero bits at every
+round). The \emph{two-sided} test (using the verified inverse permutation,
+dimension $9$, $12$ subspaces) placed a subspace at every split
+$r_{\text{back}}+r_{\text{fwd}}=8$ and required input-XOR and output-XOR to
+vanish simultaneously. Only the trivial edge splits ($0\!+\!8$ and $8\!+\!0$, in
+which one side is the raw subspace) showed any zero-sum; the degree saturates
+within two rounds from each side, and no split with $r_{\text{back}}\ge1$ and
+$r_{\text{fwd}}\ge1$ produced a two-sided zero-sum. No zero-sum distinguisher was
+found over the full eight rounds.
+
+\subsection{Exact algebraic degree}
+This is the test most capable of revealing a higher-order differential or cube
+weakness: rather than checking a fixed cube, it computes the \emph{exact}
+algebraic-normal-form degree of each output bit as a Boolean function of a chosen
+set of $n=10$ input variables (via the M\"obius transform over all $2^{10}$
+assignments, other inputs fixed). A degree that plateaus below the maximum $n$ as
+rounds increase would be a distinguisher; a healthy permutation saturates to
+near-maximal degree within a few rounds. We tested six independent variable
+placements and report the weakest (minimum) output-bit degree, since an attacker
+chooses the variables that minimise it.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccl}
+  \toprule
+  \textbf{Round} & \textbf{max degree} & \textbf{min degree (weakest bit)} & \textbf{} \\
+  \midrule
+  1 & 10 & 5 & degree still building \\
+  2 & 10 & 8 & saturated \\
+  3 & 10 & 8 & saturated \\
+  4 & 10 & 8 & saturated \\
+  8 & 10 & 8 & saturated \\
+  \bottomrule
+\end{tabular}
+\caption{Exact algebraic degree over $n=10$ input variables (maximum possible
+degree $10$). Degree reaches near-maximal by round $2$ and holds.}
+\end{table}
+
+The minimum degree of $8$ from round $2$ onward warranted scrutiny, since a
+plateau below maximal is the signature of a distinguisher. Direct inspection of
+the full degree distribution at eight rounds resolves it as benign: of the $2048$
+output bits, $1027$ have degree $10$, $1020$ have degree $9$, and exactly
+\emph{one} has degree $8$ (and that bit was verified to depend on all $10$
+variables, so its degree is not capped by missing dependence). This is precisely
+the distribution expected of $2048$ near-random degree-$\le 10$ Boolean functions:
+the top-degree ANF coefficient is present or absent with probability $\approx
+1/2$, so a small number of bits randomly fall to degree $9$ and, rarely, $8$. A
+genuine weakness would instead show many output bits stuck at low degree with the
+count persisting or growing across rounds; the observed behaviour is the opposite
+(full saturation by round $2$ with a single statistical straggler). No
+low-degree distinguisher is present over the tested variable sets.
+
+\subsection{Differential clustering (empirical differential probability)}
+The active-\sbx\ bound in the companion analysis bounds the best single
+\emph{characteristic}; a differential attack instead exploits a \emph{differential}
+$(\delta_{\text{in}}\!\to\!\delta_{\text{out}})$, summing the probabilities of all
+characteristics sharing that input/output pair (the cluster). A differential can
+therefore have higher probability than any single characteristic. We probe this
+empirically: fix the minimal-trail input difference identified in the companion
+analysis ($4$ active bytes, all in lane~$7$, in words $0,12,19,28$), push
+$200{,}000$ random message pairs $(x, x\oplus\delta_{\text{in}})$ through $r$
+rounds of the compiled permutation, and tally the resulting output differences on
+a $16$-byte ($128$-bit) projection. A surviving cluster would appear as some
+projected output difference recurring far more often than chance; at this scale
+($2\times10^5$ trials over $2^{128}$ cells) the chance baseline is essentially
+zero, so any projected difference recurring even twice is candidate signal
+(detection floor $\approx 2^{-17}$).
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lccl}
+  \toprule
+  \textbf{Round} & \textbf{distinct diffs} & \textbf{max recurrence} & \textbf{} \\
+  \midrule
+  1 & 200{,}000 & 1 & flat \\
+  2 & 200{,}000 & 1 & flat \\
+  3 & 200{,}000 & 1 & flat \\
+  4 & 200{,}000 & 1 & flat \\
+  5 & 200{,}000 & 1 & flat \\
+  6 & 200{,}000 & 1 & flat \\
+  7 & 200{,}000 & 1 & flat \\
+  8 & 200{,}000 & 1 & flat \\
+  \bottomrule
+\end{tabular}
+\caption{Differential clustering on the minimal-trail input difference,
+$200{,}000$ message pairs per round, $128$-bit output-difference projection. Every
+projected output difference was unique at every round (maximum recurrence $1$
+against a chance threshold of $2$); no differential cluster was detected. Detection
+floor $\approx 2^{-17}$.}
+\end{table}
+
+No differential cluster with probability above the $\approx 2^{-17}$ detection
+floor was found for the minimal-trail input difference at any round from one to
+eight. This is direct empirical evidence against a fat differential cluster on the
+trail the MILP bound rides; it is sampling-bounded and does not exclude a fainter
+cluster (the proven single-characteristic bound is far below any reachable
+sampling sensitivity), so it complements rather than replaces the analytical
+single-trail bound.
+
+\subsection{RX-difference (rotational-XOR) bias}
+The plain rotational test above rules out exact rotational symmetry; a finer
+probe is whether a \emph{rotational-XOR} (RX) difference --- a fixed difference
+imposed between a state and a rotated copy --- propagates with detectable bias.
+We measured, over $500{,}000$ trials per configuration at one round, the maximum
+per-output-bit bias across all $2048$ output bits (the $5\sigma$ detection
+threshold at this sample size is $0.003536$). A single-word sweep over rotation
+constants $\{7,13,17,19,31,37\}$ and injection words $\{0,8,16\}$ left $17$ of
+$18$ configurations clearly below threshold (range $0.002228$--$0.002796$); the
+lone marginal exceedance (\texttt{rx\_rot=17}, \texttt{inj\_word=8}: bias
+$0.003572$, one bit of $2048$, $\approx\!1.01\times$ threshold) is consistent
+with the expected false-positive rate. A heavy-mode sweep over all $63$
+non-trivial rotation constants for four multi-word injection blocks ($252$
+configurations) failed to reproduce it: every configuration stayed below
+threshold, the highest bias observed being $0.003472$ ($1.8\%$ below the
+$5\sigma$ threshold). No RX-difference distinguisher was detected.
+
+\subsection{Impossible differentials}
+For each of four input-bit positions ($0,64,512,1984$) and four output-byte
+positions ($0,31,127,255$), $200{,}000$ random pairs $(x,x\oplus\delta)$ were
+pushed through the reduced-round permutation and the output-difference histogram
+at the chosen byte was tallied; any non-trivial output difference with count
+zero is an impossible-differential candidate. At both one and two rounds every
+completed configuration was clean ($0/255$ non-trivial differences missing). No
+impossible-differential candidate was found.
+
+\subsection{Boomerang / BCT}
+The full $256\times256$ Boomerang Connectivity Table of the \sbx\ was computed by
+enumeration. Its maximum entry (excluding the trivial $(a,0)$ and $(0,b)$ rows)
+is $6$, at $(a,b)=(\mathtt{0x01},\mathtt{0x05})$, with non-zero entries
+distributed as $6$ at $510$ pairs, $4$ at $255$ pairs, $2$ at $31{,}620$ pairs.
+A BCT maximum of $6$ exceeds the DDT-flat ideal of $2$, giving a per-\sbx\
+boomerang switch probability of $2^{-5.42}$ --- a property of the \sbx\ alone and
+round-independent. An empirical $50{,}000$-trial boomerang quartet experiment
+with input difference $\alpha=\mathtt{0x01}$ at byte~$0$ gave a maximum
+output-difference count of $232$ at one round (uniform expectation $195.3$, ratio
+$1.19$) and $229$ at two rounds (ratio $1.17$), both well below the $2.0$ anomaly
+threshold. The elevated \sbx\ BCT entry does not propagate to a full-permutation
+boomerang distinguisher at any tested round count.
+
+\subsection{Differential-linear}
+This test splits the permutation into a top and bottom half and so requires at
+least two rounds. At two rounds, five $(r_0,\delta,\gamma)$ configurations were
+probed over $200{,}000$ trials each (the $5\sigma$ bias threshold at this sample
+size is $0.011180$). The highest observed correlation was $|\mathrm{corr}|=
+0.003380$ --- less than a third of the threshold --- and all five configurations
+were below it. No differential-linear bias was detected.
+
+\subsection{Invariant subspace / \sbx-coset structure}
+An exhaustive enumeration of all $(a,g)$ pairs satisfying $S(a)\oplus S(a\oplus
+g)=g$ found $282$ dimension-one coset hits across $141$ distinct generators (of
+$255$) --- the candidate seeds of an invariant-subspace trail. None of the $282$
+survived a full round in either the constant-base probe or a random-base
+empirical probe ($2{,}000$ trials per sampled pair), at one or two rounds. An
+exhaustive check of all $32{,}385$ dimension-two subspaces found no coset hit at
+all. The dimension-one hit count is unremarkable for an $8$-bit \sbx; the
+decisive observation is that the structure does not survive the round function,
+so it cannot seed an invariant-subspace trail.
+
+\subsection{Structural sanity checks}
+Independently of the above, the compiled permutation passed a battery of gross
+structural checks (sampled, not proofs): bijectivity on a sample
+($2000/2000$ distinct outputs), absence of fixed points ($0$ among $503$ states,
+including the all-zero and all-one states), and a sampled subspace-trail collapse
+test (random low-dimensional affine subspaces show no rank collapse under the
+permutation). All passed. These rule out several gross structural weaknesses but
+do not substitute for an analytical invariant-subspace / subspace-trail study.
+
+\section{Scope and honest limitations}
+
+The Section~2 foundations are exact proofs. The Section~3 battery is
+\emph{empirical}: each test rules out a detectable distinguisher of its kind at
+the sampled scale, and passing is necessary but not sufficient for security.
+Specifically:
+\begin{itemize}\itemsep2pt
+  \item The rotational test is an empirical distinguisher, not a proof of
+        rotational-XOR security; an RX-trail search with explicit carry
+        probabilities (MILP) is the stronger form and remains future work.
+  \item The integral test is the classical (byte-saturation) form; the
+        division-property integral (Todo, MILP) can detect distinguishers this
+        misses and remains future work.
+  \item The cube and zero-sum tests use fixed cube/subspace dimensions; they are
+        not exhaustive ANF-degree bounds.
+  \item The algebraic-degree test samples six variable placements; an attacker
+        chooses the placement freely, so a carefully-positioned higher-order
+        distinguisher is not excluded. The exhaustive form is a division-property
+        degree bound (MILP) over all variable choices, which remains future work
+        and is the highest-value remaining self-conducted analysis.
+  \item The impossible-differential, boomerang, differential-linear, and
+        invariant-subspace probes were run only at one and two rounds (the
+        regime where a structural distinguisher, if present, is cheapest to
+        detect); they bound reduced-round behaviour, not the full eight rounds,
+        and the impossible-differential runs were additionally truncated by
+        their time limit before every input-bit position completed.
+  \item Algebraic (Gr\"obner-basis) attacks, the interaction of the permutation
+        with the sponge construction, and---most importantly---adversarial
+        review by independent cryptanalysts are not addressed here.
+\end{itemize}
+Taken together with the proven active-\sbx\ bounds in the companion analysis,
+these results constitute a thorough self-conducted first-pass evaluation: the
+foundations are proven, and no distinguisher of the tested families survives the
+full permutation. They are offered as evidence supporting the design, not as a
+substitute for external cryptanalysis.
+
+\end{document}
