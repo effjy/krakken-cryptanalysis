@@ -361,6 +361,58 @@ count persisting or growing across rounds; the observed behaviour is the opposit
 (full saturation by round $2$ with a single statistical straggler). No
 low-degree distinguisher is present over the tested variable sets.
 
+\subsection{Division-property integral (bit-based, MILP)}
+\label{sec:divprop}
+The integral test above (byte saturation) is a sampling test; its analytical
+counterpart is the \emph{bit-based division property} (two-subset / conventional
+CBDP, Todo--Xiang et al.), which propagates a division trail through the round
+function as a mixed-integer program and proves an output bit \emph{balanced}
+(zero-sum over the chosen input cube) exactly when its division trail is
+infeasible. Unlike the empirical battery, a bit certified balanced this way is a
+\emph{proof}, not a statistical observation. This is the analysis previously
+listed as future work; we report it here as a working, sound harness together
+with its current results.
+
+\paragraph{Model.} One Krakken round is modelled bit-for-bit: the three
+GF(2)-linear layers (the \textsc{MDS}-based diffusion, the butterfly diffusion,
+and the \textsc{InkCloud} word-shuffle) by their exact matrices extracted from
+the reference implementation, the ARX \textsc{Pressure} layer by a sound
+full-adder carry-chain over-approximation, and each ABYSSAL \sbx\ by its
+division-property transitions. The circuits are validated bit-for-bit against the
+compiled permutation and the ARX division rule against exhaustive enumeration of a
+$4$-bit adder, so the model is \emph{sound}: every bit it certifies balanced is a
+genuine zero-sum bit, and the conservative directions (the ARX over-approximation
+and the inequality \sbx\ model below) can only cause it to \emph{miss} balanced
+bits, never to invent one.
+
+\paragraph{Making it tractable.} The textbook ``selector'' \sbx\ model encodes
+the $\approx\!2015$ minimal division trails of the $8$-bit \sbx\ as that many
+binary selector variables \emph{per \sbx\ instance}---about $5\times10^{5}$
+binaries per round across the $256$ \sbxes\ of the nonlinear layer. At that size
+the solver (SCIP) could not resolve a \emph{single} output bit, even without a
+time limit (the one-round model has $937{,}952$ variables; every output bit hit
+the per-bit time cap). We replace it with a compact \emph{inequality} model: a set
+of linear inequalities over the $16$ input/output bits with \emph{no} auxiliary
+variables, generated as one ``no-good'' exclusion cut per impossible division
+transition and then greedily merged. The result is $661$ inequalities and is
+\emph{exact}---verified over all $2^{16}$ points of the \sbx\ division polytope to
+retain every one of the $62{,}741$ valid transitions and exclude all $2{,}795$
+impossible ones, reproducing the trail table and the algebraic degree $7$. This
+cuts the one-round model from $937{,}952$ to $422{,}112$ variables and is what
+makes the program solvable at all.
+
+\paragraph{Current result.} With the compact model the round-$1$ program solves
+to optimality---for a saturated input word as the cube, output bit~$0$ is proved
+\emph{reachable} (i.e.\ not balanced) in $\approx\!160$\,s, whereas the selector
+model never terminated on any bit. This is consistent with the empirical integral
+finding above: full-state first-round diffusion already removes byte balance, so
+no surviving integral is expected even at one round. The exhaustive
+determination---sweeping all $2048$ output bits and increasing the round count
+until no balanced bit remains, which would fix the integral-distinguisher
+length---is a long-running computation; the operational harness and its round-$1$
+confirmation are reported here, with the multi-round sweep to follow. The harness
+is released alongside this note so the result can be reproduced and extended.
+
 \subsection{Differential clustering (empirical differential probability)}
 The active-\sbx\ bound in the companion analysis bounds the best single
 \emph{characteristic}; a differential attack instead exploits a \emph{differential}
@@ -486,9 +538,12 @@ Specifically:
   \item The rotational test is an empirical distinguisher, not a proof of
         rotational-XOR security; an RX-trail search with explicit carry
         probabilities (MILP) is the stronger form and remains future work.
-  \item The integral test is the classical (byte-saturation) form; the
-        division-property integral (Todo, MILP) can detect distinguishers this
-        misses and remains future work.
+  \item The integral test in this section is the classical (byte-saturation)
+        form. Its analytical counterpart, the bit-based division-property integral
+        (two-subset CBDP, MILP), is now implemented (Section~\ref{sec:divprop}): the harness is
+        operational and sound, the round-1 program solves to optimality, and the
+        exhaustive multi-round sweep that would fix the integral-distinguisher
+        length is an ongoing computation rather than future work.
   \item The cube and zero-sum tests use fixed cube/subspace dimensions; they are
         not exhaustive ANF-degree bounds.
   \item The algebraic-degree test samples six variable placements; an attacker

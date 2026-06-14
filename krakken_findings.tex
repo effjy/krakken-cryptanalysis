@@ -353,6 +353,28 @@ bounds: the MILP bounds rule out differential and linear distinguishers
 analytically; the harness results give direct empirical evidence against
 integral and algebraic zero-sum distinguishers at reduced round counts.
 
+\paragraph{Division-property integral (analytical, MILP).}
+The two tests above are empirical samplings. Their analytical counterpart is the
+bit-based division property (two-subset CBDP), which proves an output bit balanced
+exactly when its division trail through the round function is infeasible---a
+proof, not a statistical observation. We have built a sound MILP harness for this:
+each round is modelled bit-for-bit (the linear layers by their exact GF(2)
+matrices, the ARX PRESSURE layer by a sound full-adder over-approximation, the
+ABYSSAL \sbx\ by its division transitions), with the circuits validated bit-for-bit
+against the compiled permutation. The practical obstacle was the \sbx\ model: the
+standard ``selector'' encoding adds $\approx\!2015$ binary variables per \sbx\
+($\approx\!5\times10^{5}$ per round), and at that size the solver could not resolve
+a single output bit. Replacing it with a compact, \emph{exact} inequality model
+($661$ inequalities, no auxiliary variables, verified over all $2^{16}$ points of
+the \sbx\ division polytope) cuts the one-round program from $937{,}952$ to
+$422{,}112$ variables and makes it solvable: round~$1$ now solves to optimality
+(output bit~$0$ proved reachable in $\approx\!160$\,s) where the selector model
+never terminated. The round-$1$ result is consistent with the empirical integral
+finding---first-round diffusion already balances away---and the exhaustive
+multi-round sweep that would establish the integral-distinguisher length is an
+ongoing computation. The harness is released with this analysis for reproduction
+and extension.
+
 \section{Rotational and RX-difference distinguisher experiments}
 \label{sec:rotational}
 
