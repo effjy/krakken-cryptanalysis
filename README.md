@@ -13,6 +13,7 @@
 [![Active S-boxes: 229](https://img.shields.io/badge/min%20active%20S--boxes-229-brightgreen.svg)](#what-the-papers-cover)
 [![Char. bound: 2⁻¹³⁷⁴](https://img.shields.io/badge/characteristic%20bound-2%E2%81%BB%C2%B9%C2%B3%E2%81%B7%E2%81%B4-brightgreen.svg)](#what-the-papers-cover)
 [![NIST SP 800-22: PASS](https://img.shields.io/badge/NIST%20SP%20800--22-PASS-success.svg)](#3-nist-sp-800-22-on-the-sponge-keystream)
+[![Division property: MILP](https://img.shields.io/badge/division%20property-MILP%20(SCIP)-blueviolet.svg)](#4-division-property-integral-search--division)
 [![Papers: 2](https://img.shields.io/badge/papers-2-blueviolet.svg)](#-download-the-papers)
 
 </div>
@@ -104,6 +105,10 @@ degree, exact algebraic degree (Möbius), forward & two-sided zero-sum,
 differential clustering, impossible differentials, boomerang / BCT,
 differential-linear, and invariant-subspace / S-box-coset structure.
 
+The **analytical** complement to the integral test — a sound **bit-based
+division-property MILP** — is now implemented (Paper 1 §2.7, harness in
+`division/`); see [§4 below](#4-division-property-integral-search--division).
+
 ### New test suites in this repository
 
 Three additional families were added and written into both papers:
@@ -126,10 +131,17 @@ Three additional families were added and written into both papers:
 │   ├── sac_test.c
 │   ├── krakken_multi.c              # AVX2 permutation (linked)
 │   └── Makefile
-└── collision_tests/                 # sponge-hash collision / distribution battery
-    ├── collision_test.c
-    ├── krakken_multi.c              # AVX2 permutation + hash (linked)
-    └── Makefile
+├── collision_tests/                 # sponge-hash collision / distribution battery
+│   ├── collision_test.c
+│   ├── krakken_multi.c              # AVX2 permutation + hash (linked)
+│   └── Makefile
+└── division/                        # bit-based division-property integral search (MILP)
+    ├── krakken.c / .h               # reference permutation (built to libkrakken.so)
+    ├── gen_facets.py                # compact EXACT S-box division model generator
+    ├── krakken_divprop.py           # the search (SCIP MILP)
+    ├── model.py / cbdp.py / layers.py / sbox_trails.py
+    ├── validate_*.py                # soundness gates
+    └── Makefile / runs.sh / README.md
 ```
 
 > **Note:** `krakken_multi.c` is the AVX2 reference implementation of the
@@ -182,6 +194,37 @@ Cumulative Sums, Runs, Longest Run, Rank, FFT, Non-Overlapping Template,
 Overlapping Template, Universal, Approximate Entropy, Random Excursions &
 Variant, Serial, Linear Complexity). A high-throughput monobit/runs cross-check
 over 10⁸ bits is unremarkable, with byte entropy > 7.999 bits/byte.
+
+### 4. Division-property integral search — `division/`
+
+The analytical counterpart to the empirical integral test: the **bit-based
+division property** (two-subset CBDP), modelled as a MILP and solved with **SCIP**.
+It propagates a division trail through the round function and proves an output bit
+**balanced** (zero-sum over the chosen input cube) exactly when its trail is
+infeasible — a *proof*, not a statistical observation. The model is **sound**:
+every bit it certifies balanced is a genuine zero-sum bit (the ARX and S-box
+models are conservative, so it may miss some but never reports a false one).
+
+The practical obstacle for a 2048-bit state is the S-box: the textbook *selector*
+model adds ≈ 2015 binary variables per S-box (≈ 5 × 10⁵ per round), and SCIP could
+not resolve a single output bit. This harness replaces it with a compact **exact**
+inequality model (`gen_facets.py`: **661 inequalities, no auxiliary variables**,
+verified over all 2¹⁶ points of the S-box division polytope), which drops the
+one-round program from **937,952 → 422,112 variables** and makes it solvable —
+round 1 now solves to optimality where the selector model never terminated. The
+exhaustive multi-round sweep that would fix the integral-distinguisher length is a
+long-running computation; this is the harness behind §2.7 of Paper 1.
+
+```bash
+cd division
+make            # build libkrakken.so + generate the exact facet model (~10 s)
+./runs.sh 1     # round 1, full word:0 cube, all output bits (logs to runs/)
+./runs.sh validate   # correctness gates (wiring, ARX rule, S-box)
+```
+
+> **Requirements differ from the C harnesses:** a Python venv with
+> **pyscipopt** (SCIP), **numpy** and **scipy** (default `~/venv`; override with
+> `PY=/path/to/python`), plus `gcc`. See `division/README.md` for full usage.
 
 ---
 
