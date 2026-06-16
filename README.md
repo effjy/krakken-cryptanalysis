@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🦑 Krakken-2048 — Cryptanalysis & Verification Suite
+<a href="https://github.com/effjy/krakken-cryptanalysis/"><img src="titles/krakken-2048-cryptanalysis-title.svg" height="52" alt="Krakken-2048 Cryptanalysis"></a>
+
+Krakken-2048 — Cryptanalysis & Verification Suite
 
 **A 2048-bit SPN-ARX wide-trail permutation, its sponge hash, and the empirical + provable analysis behind it.**
 
